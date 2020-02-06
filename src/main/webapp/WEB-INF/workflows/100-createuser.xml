@@ -1,0 +1,32 @@
+<workflow  name="createuser" label="Create User" description="Create User" inList="false" orgid="687da09f-8ec1-48ac-b035-f2f182b9bd1e">
+        <tasks>
+        <customTask className="com.tremolosecurity.provisioning.customTasks.Attribute2Groups">
+            <param name="attributeName" value="group"/>
+        </customTask>
+          <mapping  strict="true">
+            <map>
+              <mapping targetAttributeName="TREMOLO_USER_ID" sourceType="custom" targetAttributeSource="com.tremolosecurity.unison.k8s.mapping.Email2Uid"/>
+              <mapping targetAttributeName="sub" sourceType="custom" targetAttributeSource="com.tremolosecurity.unison.k8s.mapping.Email2Uid"/>
+              <mapping targetAttributeName="mail" sourceType="user" targetAttributeSource="mail"/>
+              <mapping targetAttributeName="firstName" sourceType="user" targetAttributeSource="givenname"/>
+              <mapping targetAttributeName="lastName" sourceType="user" targetAttributeSource="sn"/>
+            </map>
+            <onSuccess>
+      
+              <addGroup name="users" />
+              <provision sync="true" target="jitdb" setPassword="true" onlyPassedInAttributes="false" >
+                <attributes>
+                  <value>sub</value>
+                  <value>mail</value>
+                  <value>firstName</value>
+                  <value>lastName</value>
+                </attributes>
+              </provision>
+              <resync keepExternalAttrs="false" changeRoot="true" newRoot="o=Tremolo" />
+              <notifyUser subject="Your account has been created" mailAttrib="mail">
+                    <msg>Your profile has been created.  Set your password by going to https://#[OU_HOST]/passwordreset/index.html </msg>
+                    </notifyUser>
+            </onSuccess>
+          </mapping>
+    </tasks>
+</workflow>

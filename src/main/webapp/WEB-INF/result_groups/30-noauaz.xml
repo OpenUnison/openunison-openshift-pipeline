@@ -1,0 +1,7 @@
+<resultGroup name="noauaz">
+  <result>
+    <type>redirect</type>
+    <source>static</source>
+    <value>/auth/forms/defaultFailedLogin.jsp</value>
+  </result>
+</resultGroup>

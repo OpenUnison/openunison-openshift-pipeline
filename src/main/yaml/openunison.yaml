@@ -1,0 +1,148 @@
+# ActiveMQ
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: amq
+  name: amq
+  namespace: openunison
+spec:
+  ports:
+  - name: amq-openwire
+    port: 61616
+    protocol: TCP
+    targetPort: 61616
+  - name: amq-admin
+    port: 8162
+    protocol: TCP
+    targetPort: 8162
+  selector:
+    app: amq
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: amq
+  name: amq
+  namespace: openunison
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: amq
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: amq
+    spec:
+      containers:
+      - env:
+        - name: JAVA_OPTS
+          value: -Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom
+        - name: JDBC_DRIVER
+          valueFrom:
+            secretKeyRef:
+              name: amq-env-secrets
+              key: JDBC_DRIVER
+        - name: JDBC_URL
+          valueFrom:
+            secretKeyRef:
+              name: amq-env-secrets
+              key: JDBC_URL
+        - name: JDBC_USER
+          valueFrom:
+            secretKeyRef:
+              name: amq-env-secrets
+              key: JDBC_USER
+        - name: JDBC_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: amq-env-secrets
+              key: JDBC_PASSWORD
+        - name: TLS_KS_PWD
+          valueFrom:
+            secretKeyRef:
+              name: amq-env-secrets
+              key: TLS_KS_PWD
+        image: docker.io/tremolosecurity/activemq-docker
+        imagePullPolicy: Always
+        livenessProbe:
+          tcpSocket:
+            port: 61616
+          failureThreshold: 10
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 10
+        name: openunison
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        readinessProbe:
+          tcpSocket:
+            port: 61616
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 10
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/activemq
+          name: secret-volume
+          readOnly: true
+        - mountPath: /usr/local/activemq/data
+          name: local-data
+        - mountPath: /usr/local/activemq/tmp
+          name: jetty-tmp
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: secret-volume
+        secret:
+          defaultMode: 420
+          secretName: amq-secrets
+      - name: local-data
+        emptyDir: {}
+      - name: jetty-tmp
+        emptyDir: {}
+---
+kind: Service
+apiVersion: v1
+spec:
+  ports:
+  - port: 443
+    targetPort: 8443
+    name: secure
+  selector:
+    deploymentConfig: "openunison"
+metadata:
+  name: secure-openunison
+  namespace: openunison
+  labels:
+    application: "openunison"
+  annotations:
+    description: OpenUnison's https port for #[OU_HOST]

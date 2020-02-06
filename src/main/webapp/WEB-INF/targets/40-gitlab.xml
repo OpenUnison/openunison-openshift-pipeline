@@ -1,0 +1,8 @@
+<target name="gitlab" className="com.tremolosecurity.unison.k8s.targets.GitLabUserStoreProvider">
+  <params>
+    <param name="url" value="#[GITLAB_API_URL]"/>
+    <param name="token" value="#[GITLAB_API_TOKEN]"/>
+    
+  </params>
+  
+</target>

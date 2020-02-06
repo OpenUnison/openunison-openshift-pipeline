@@ -1,0 +1,6 @@
+<mechanism name="createuid">
+  <uri>/auth/createuid</uri>
+  <className>com.tremolosecurity.unison.k8s.auth.MapEmailToUID</className>
+  <init>
+  </init>
+</mechanism>

@@ -1,0 +1,51 @@
+<workflow name="DeployToProduction" label="Production Deploy - $projectshortname$" description="Deploy $projectshortname$ to production" inList="true" orgid="cecae082-c85d-48df-a837-4726bb755180">
+<dynamicConfiguration dynamic="true" className="com.tremolosecurity.unison.openshiftv3.wf.OpenShiftWorkflows">
+  <param name="target" value="openshift"/>
+  <param name="kind" value="/api/v1/namespaces?labelSelector=generatedby%3Dworkflow"/>
+  
+</dynamicConfiguration>
+<tasks>
+  
+  
+  <customTask className="com.tremolosecurity.provisioning.customTasks.LoadAttributes">
+      <param name="nameAttr" value="uid"/>
+      <param name="name" value="givenname"/>
+      <param name="name" value="sn"/>
+      <param name="name" value="mail"/>
+  </customTask>
+  <approval label="Approve production deployment for $projectshortname$">
+    <onSuccess>
+
+        <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+            <param name="targetName" value="openshift-prod"/>
+            <param name="template" value="{&quot;kind&quot;:&quot;ImageStreamTag&quot;,&quot;apiVersion&quot;:&quot;image.openshift.io/v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectshortname$:latest&quot;,&quot;namespace&quot;:&quot;$projectshortname$-prod&quot;,&quot;creationTimestamp&quot;:null},&quot;tag&quot;:{&quot;name&quot;:&quot;&quot;,&quot;annotations&quot;:null,&quot;from&quot;:{&quot;kind&quot;:&quot;DockerImage&quot;,&quot;name&quot;:&quot;#[OPENSHIFT_DEV_REGISTRY_HOST]/$projectshortname$-test/$projectshortname$:latest&quot;},&quot;generation&quot;:0,&quot;importPolicy&quot;:{},&quot;referencePolicy&quot;:{&quot;type&quot;:&quot;Source&quot;}},&quot;generation&quot;:0,&quot;lookupPolicy&quot;:{&quot;local&quot;:false},&quot;image&quot;:{&quot;metadata&quot;:{&quot;creationTimestamp&quot;:null},&quot;dockerImageMetadata&quot;:null,&quot;dockerImageLayers&quot;:null}}"/>
+            <param name="kind" value="ImageStreamTag" />
+            <param name="url" value="/apis/image.openshift.io/v1/namespaces/$projectshortname$-prod/imagestreamtags/$projectshortname$:latest" />
+            <param name="doPost" value="false" />
+        </customTask>
+          
+          <notifyUser subject="Admin access to $name$ approved" mailAttrib="mail">
+              <msg>Production deployment approved and completed</msg>
+          </notifyUser>
+      </onSuccess>
+      <onFailure>
+          
+          
+      </onFailure>
+      <emailTemplate>New open request</emailTemplate>
+      <approvers>
+          <rule scope="group" constraint="cn=administrators,ou=groups,ou=shadow,o=Tremolo"/>
+      </approvers>
+      <mailAttr>mail</mailAttr>
+      <failureEmailSubject>Request denied</failureEmailSubject>
+      <failureEmailMsg>for reason:&#xD;
+&#xD;
+${reason}</failureEmailMsg>
+      <escalationPolicy>
+          <escalationFailure action="leave">
+              <azRules/>
+          </escalationFailure>
+      </escalationPolicy>
+  </approval>
+</tasks>
+</workflow>

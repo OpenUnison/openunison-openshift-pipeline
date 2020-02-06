@@ -1,0 +1,115 @@
+<workflow  name="jitdb" label="JIT" description="JIT" inList="false" orgid="687da09f-8ec1-48ac-b035-f2f182b9bd1e">
+  <tasks>
+    <customTask className="com.tremolosecurity.provisioning.customTasks.LoadGroups">
+      <param name="nameAttr" value="uid"/>
+    </customTask>
+    <mapping  strict="true">
+      <map>
+        <mapping targetAttributeName="TREMOLO_USER_ID" sourceType="user" targetAttributeSource="uid"/>
+        <mapping targetAttributeName="sub" sourceType="user" targetAttributeSource="uid"/>
+        <mapping targetAttributeName="mail" sourceType="user" targetAttributeSource="mail"/>
+        <mapping targetAttributeName="firstName" sourceType="user" targetAttributeSource="givenname"/>
+        <mapping targetAttributeName="lastName" sourceType="user" targetAttributeSource="sn"/>
+      </map>
+      <onSuccess>
+
+        
+        <provision sync="true" target="jitdb" setPassword="false" onlyPassedInAttributes="false" >
+          <attributes>
+            <value>sub</value>
+            <value>mail</value>
+            <value>firstName</value>
+            <value>lastName</value>
+          </attributes>
+        </provision>
+        <resync keepExternalAttrs="false" changeRoot="true" newRoot="o=Tremolo" />
+      </onSuccess>
+    </mapping>
+
+    <!-- Create sandbox project -->
+
+    <customTask className="com.tremolosecurity.unison.k8s.tasks.CreateProjectName" />
+
+    <customTask className="com.tremolosecurity.provisioning.customTasks.LoadAttributes">
+        <param name="nameAttr" value="uid"/>
+        <param name="name" value="givenname"/>
+        <param name="name" value="sn"/>
+        <param name="name" value="mail"/>
+    </customTask>
+
+    <customTask className="com.tremolosecurity.unison.k8s.tasks.ProjectExists" >
+      <param name="targetName" value="openshift" />
+
+    </customTask>
+
+    <ifAttrHasValue name="sandboxExists" value="false">
+      <onSuccess>
+          <customTask className="com.tremolosecurity.provisioning.customTasks.ClearGroups"/>            
+          <customTask className="com.tremolosecurity.provisioning.customTasks.AddGroupToStore">
+              <param name="target" value="jitdb"/>
+              <param name="name" value="approvers-openshift-$projectName$"/>
+              <param name="attributes" value="unison.group.create.sql=INSERT INTO localGroups (name,description) VALUES (?,?)"/>
+              <param name="attributes" value="unison.group.create.param.2=Approve access to $projectName$" />
+          </customTask>
+          <mapping strict="true">
+              <onSuccess>
+                  <addGroup name="approvers-openshift-$projectName$" remove="false"/>
+                  <provision sync="false" target="jitdb" setPassword="false" onlyPassedInAttributes="false">
+                      <attributes>
+                        <value>uid</value>
+                      </attributes>
+                  </provision>
+              </onSuccess>
+              <onFailure/>
+              <map>
+                  <mapping targetAttributeName="uid" targetAttributeSource="uid" sourceType="user"/>
+              </map>
+          </mapping>
+          <customTask className="com.tremolosecurity.provisioning.customTasks.AddGroupToStore">
+              <param name="target" value="openshift"/>
+              <param name="name" value="administrators-$projectName$"/>
+          </customTask>
+          <customTask className="com.tremolosecurity.provisioning.customTasks.AddGroupToStore">
+              <param name="target" value="openshift"/>
+              <param name="name" value="viewer-$projectName$"/>
+          </customTask>
+          <mapping strict="true">
+              <onSuccess>
+                  <addGroup name="administrators-$projectName$" remove="false"/>
+                  <provision sync="false" target="openshift" setPassword="false" onlyPassedInAttributes="false">
+                      <attributes/>
+                  </provision>
+              </onSuccess>
+              <onFailure/>
+              <map>
+                  <mapping targetAttributeName="uid" targetAttributeSource="uid" sourceType="user"/>
+              </map>
+          </mapping>
+
+          <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+              <param name="targetName" value="openshift"/>
+              <param name="template" value="{&quot;kind&quot;:&quot;Namespace&quot;,&quot;apiVersion&quot;:&quot;v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$&quot;,&quot;labels&quot;:{&quot;name&quot;:&quot;$projectName$&quot;}}}"/>
+              <param name="kind" value="Namespace" />
+              <param name="url" value="/api/v1/namespaces" />
+          </customTask>
+
+          <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+              <param name="targetName" value="openshift"/>
+              <param name="template" value="{&quot;kind&quot;:&quot;RoleBinding&quot;,&quot;apiVersion&quot;:&quot;rbac.authorization.k8s.io/v1beta1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;admins&quot;,&quot;namespace&quot;:&quot;$projectName$&quot;},&quot;subjects&quot;:[{&quot;kind&quot;:&quot;Group&quot;,&quot;name&quot;:&quot;administrators-$projectName$&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}],&quot;roleRef&quot;:{&quot;kind&quot;:&quot;ClusterRole&quot;,&quot;name&quot;:&quot;admin&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}}"/>
+              <param name="kind" value="RoleBinding" />
+              <param name="url" value="/apis/rbac.authorization.k8s.io/v1beta1/namespaces/$projectName$/rolebindings" />
+          </customTask>
+
+          
+
+          <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+              <param name="targetName" value="openshift"/>
+              <param name="template" value="{&quot;kind&quot;:&quot;RoleBinding&quot;,&quot;apiVersion&quot;:&quot;rbac.authorization.k8s.io/v1beta1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;viewers&quot;,&quot;namespace&quot;:&quot;$projectName$&quot;},&quot;subjects&quot;:[{&quot;kind&quot;:&quot;Group&quot;,&quot;name&quot;:&quot;viewer-$projectName$&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}],&quot;roleRef&quot;:{&quot;kind&quot;:&quot;ClusterRole&quot;,&quot;name&quot;:&quot;view&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}}"/>
+              <param name="kind" value="RoleBinding" />
+              <param name="url" value="/apis/rbac.authorization.k8s.io/v1beta1/namespaces/$projectName$/rolebindings" />
+          </customTask>
+
+      </onSuccess>
+    </ifAttrHasValue>
+  </tasks>
+</workflow>

@@ -1,0 +1,214 @@
+<workflow  name="DeployApplication" label="Deploy Application" description="Deploys the basics of an application" inList="false" orgid="B158BD40-0C1B-11E3-8FFD-0800200C9A66">
+    <dynamicConfiguration dynamic="false" />
+    <tasks>
+        <customTask className="com.tremolosecurity.provisioning.customTasks.CopyFromUserToRequest">
+            <param name="attribute" value="projectName"/>
+            <!-- 
+            <param name="attribute" value="gitSshUrl"/>
+            <param name="attribute" value="gitPrivateKey"/>
+            -->
+            <param name="attribute" value="imageStream"/>
+            <param name="keepInUser" value="false"/>
+        </customTask>
+
+        <customTask className="com.tremolosecurity.provisioning.customTasks.CopyFromUserToRequest">
+            <param name="attribute" value="uid"/>
+            <param name="keepInUser" value="true"/>
+        </customTask>
+
+        <customTask className="com.tremolosecurity.provisioning.customTasks.LoadAttributes">
+            <param name="nameAttr" value="uid"/>
+            <param name="name" value="givenname"/>
+            <param name="name" value="sn"/>
+            <param name="name" value="mail"/>
+        </customTask>
+        <approval label="Create New Project - $projectName$">
+            <onSuccess>
+                <!-- GitLab Project -->
+                <customTask className="com.tremolosecurity.unison.k8s.tasks.CreateGitLabProject">
+                    <param name="target" value="gitlab" />
+                    <param name="orgName" value="#[GITLAB_ORG]" />
+                </customTask>
+                
+                
+                <!-- Jenkins Environment -->
+                <customTask className="com.tremolosecurity.unison.k8s.tasks.NewAppTasks" >
+                    <param name="target" value="openshift"/>
+                    <param name="apiserverhost" value="#[OPENSHIFT_API_HOST]" />
+                    <param name="gitlabTarget" value="gitlab" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;image.openshift.io/v1&quot;,&quot;kind&quot;:&quot;ImageStream&quot;,&quot;metadata&quot;:{&quot;creationTimestamp&quot;:null,&quot;name&quot;:&quot;$projectName$&quot;},&quot;spec&quot;:{&quot;lookupPolicy&quot;:{&quot;local&quot;:false}},&quot;status&quot;:{&quot;dockerImageRepository&quot;:&quot;&quot;}}"/>
+                    <param name="kind" value="ImageStream" />
+                    <param name="url" value="/apis/image.openshift.io/v1/namespaces/jenkins/imagestreams" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;Secret&quot;,&quot;apiVersion&quot;:&quot;v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$-pull&quot;,&quot;namespace&quot;:&quot;jenkins&quot;,&quot;labels&quot;:{&quot;credential.sync.jenkins.openshift.io&quot;:&quot;true&quot;}},&quot;data&quot;:{&quot;ssh-privatekey&quot;:&quot;$base64SshPrivateKey$&quot;},&quot;type&quot;:&quot;kubernetes.io/ssh-auth&quot;}"/>
+                    <param name="kind" value="Secret" />
+                    <param name="url" value="/api/v1/namespaces/jenkins/secrets" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;build.openshift.io/v1&quot;,&quot;kind&quot;:&quot;BuildConfig&quot;,&quot;metadata&quot;:{&quot;labels&quot;:{&quot;app&quot;:&quot;openjdk18-web-basic-s2i&quot;,&quot;application&quot;:&quot;$projectName$&quot;,&quot;template&quot;:&quot;openjdk18-web-basic-s2i&quot;,&quot;xpaas&quot;:&quot;1.4.16&quot;},&quot;name&quot;:&quot;$projectName$&quot;,&quot;namespace&quot;:&quot;jenkins&quot;},&quot;spec&quot;:{&quot;nodeSelector&quot;:{},&quot;output&quot;:{&quot;to&quot;:{&quot;kind&quot;:&quot;ImageStreamTag&quot;,&quot;name&quot;:&quot;$projectName$:latest&quot;}},&quot;postCommit&quot;:{},&quot;resources&quot;:{},&quot;runPolicy&quot;:&quot;Serial&quot;,&quot;source&quot;:{&quot;contextDir&quot;:&quot;/&quot;,&quot;git&quot;:{&quot;ref&quot;:&quot;master&quot;,&quot;uri&quot;:&quot;$gitSshInternalURL$&quot;},&quot;sourceSecret&quot;:{&quot;name&quot;:&quot;$projectName$-pull&quot;},&quot;type&quot;:&quot;Git&quot;},&quot;strategy&quot;:{&quot;sourceStrategy&quot;:{&quot;forcePull&quot;:true,&quot;from&quot;:{&quot;kind&quot;:&quot;ImageStreamTag&quot;,&quot;name&quot;:&quot;$imageStream$&quot;,&quot;namespace&quot;:&quot;openshift&quot;}},&quot;type&quot;:&quot;Source&quot;},&quot;triggers&quot;:[{&quot;imageChange&quot;:{},&quot;type&quot;:&quot;ImageChange&quot;},{&quot;type&quot;:&quot;ConfigChange&quot;}]},&quot;status&quot;:{&quot;lastVersion&quot;:0}}"/>
+                    <param name="kind" value="BuildConfig" />
+                    <param name="url" value="/apis/build.openshift.io/v1/namespaces/jenkins/buildconfigs" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;BuildConfig&quot;,&quot;apiVersion&quot;:&quot;build.openshift.io/v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$-pipeline&quot;,&quot;namespace&quot;:&quot;jenkins&quot;},&quot;spec&quot;:{&quot;nodeSelector&quot;:{},&quot;output&quot;:{},&quot;resources&quot;:{},&quot;successfulBuildsHistoryLimit&quot;:5,&quot;failedBuildsHistoryLimit&quot;:5,&quot;strategy&quot;:{&quot;type&quot;:&quot;JenkinsPipeline&quot;,&quot;jenkinsPipelineStrategy&quot;:{&quot;jenkinsfile&quot;:&quot;\nnode(&apos;maven&apos;)\n{\n def sonarurl = \&quot;http://sonarqube.sonarqube2.svc.cluster.local/\&quot;\n def sonarproj = \&quot;$projectName$\&quot;\n def sonarpass = \&quot;\&quot;\n def app = \&quot;$projectName$\&quot;\n def project = \&quot;jenkins\&quot;\n def deploytoenv = \&quot;test\&quot;\n \n git (\n    url: &apos;$gitSshInternalURL$&apos;,\n    branch: &apos;master&apos;,\n    credentialsId: &apos;jenkins-$projectName$-pull&apos;\n )\n \n def exists = fileExists &apos;pom.xml&apos;\n if (exists) {\n    stage(&apos;Build war&apos;)\n    {\n        echo \&quot;Building\&quot;\n        sh \&quot;mvn clean package -DskipTests\&quot;\n    }\n    stage(&apos;Code Analysis&apos;)\n    {\n        echo \&quot;Code Analysis\&quot;\n        //sh \&quot;${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.sonarqube2.svc.cluster.local/ -Dsonar.projectName=${JOB_BASE_NAME}\&quot;\n        sh \&quot;mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.6.0.1398:sonar -Dsonar.host.url=${sonarurl} -Dsonar.projectName=${sonarproj} -Dsonar.login=${sonarpass}\&quot;\n    }\n } else {\n    echo &apos;No SonarQube Scan&apos;\n }\n stage(&apos;Build OpenShift Image&apos;) {\n     sh \&quot;oc start-build ${app} -n ${project} --follow\&quot;\n }\n \n stage(&apos;Tag Image to Test Environment&apos;) {\n     sh \&quot;oc tag ${project}/${app}:latest ${app}-${deploytoenv}/${app}:latest\&quot;\n }\n }&quot;}},&quot;postCommit&quot;:{},&quot;source&quot;:{&quot;type&quot;:&quot;None&quot;},&quot;triggers&quot;:[{&quot;type&quot;:&quot;GitLab&quot;,&quot;gitlab&quot;:{&quot;secret&quot;:&quot;$webHookSecretData$&quot;}}],&quot;runPolicy&quot;:&quot;Serial&quot;}}"/>
+                    <param name="kind" value="BuildConfig" />
+                    <param name="url" value="/apis/build.openshift.io/v1/namespaces/jenkins/buildconfigs" />
+                </customTask>
+
+                <!-- 
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;Secret&quot;,&quot;apiVersion&quot;:&quot;v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;webhook-$projectName$&quot;,&quot;namespace&quot;:&quot;sandbox-$uid$&quot;},&quot;data&quot;:{&quot;url&quot;:&quot;$weebhookURL$&quot;},&quot;type&quot;:&quot;Opaque&quot;}"/>
+                    <param name="kind" value="Secret" />
+                    <param name="url" value="/api/v1/namespaces/sandbox-$uid$/secrets" />
+                </customTask>
+            -->
+
+                
+                <!-- Test objects -->
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;Namespace&quot;,&quot;apiVersion&quot;:&quot;v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$-test&quot;,&quot;labels&quot;:{&quot;name&quot;:&quot;$projectName$-test&quot;,&quot;generatedby&quot;:&quot;workflow&quot;},&quot;annotations&quot;:{&quot;projectshortname&quot;:&quot;$projectName$&quot;}}}"/>
+                    <param name="kind" value="Namespace" />
+                    <param name="url" value="/api/v1/namespaces" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;image.openshift.io/v1&quot;,&quot;kind&quot;:&quot;ImageStream&quot;,&quot;metadata&quot;:{&quot;creationTimestamp&quot;:null,&quot;name&quot;:&quot;$projectName$&quot;,&quot;namespace&quot;:&quot;$projectName$-test&quot;},&quot;spec&quot;:{&quot;lookupPolicy&quot;:{&quot;local&quot;:false}},&quot;status&quot;:{&quot;dockerImageRepository&quot;:&quot;&quot;}}"/>
+                    <param name="kind" value="ImageStream" />
+                    <param name="url" value="/apis/image.openshift.io/v1/namespaces/$projectName$-test/imagestreams" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;v1&quot;,&quot;kind&quot;:&quot;Service&quot;,&quot;metadata&quot;:{&quot;namespace&quot;:&quot;$projectName$-test&quot;,&quot;name&quot;:&quot;$projectName$&quot;},&quot;spec&quot;:{&quot;ports&quot;:[{&quot;port&quot;:8080,&quot;protocol&quot;:&quot;TCP&quot;,&quot;targetPort&quot;:8080}],&quot;selector&quot;:{&quot;deploymentConfig&quot;:&quot;$projectName$&quot;},&quot;sessionAffinity&quot;:&quot;None&quot;,&quot;type&quot;:&quot;ClusterIP&quot;},&quot;status&quot;:{&quot;loadBalancer&quot;:{}}}"/>
+                    <param name="kind" value="Service" />
+                    <param name="url" value="/api/v1/namespaces/$projectName$-test/services" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;apps.openshift.io/v1&quot;,&quot;kind&quot;:&quot;DeploymentConfig&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$&quot;,&quot;namespace&quot;:&quot;$projectName$-test&quot;},&quot;spec&quot;:{&quot;replicas&quot;:1,&quot;selector&quot;:{&quot;deploymentConfig&quot;:&quot;$projectName$&quot;},&quot;strategy&quot;:{&quot;rollingParams&quot;:{&quot;maxSurge&quot;:&quot;25%&quot;,&quot;maxUnavailable&quot;:&quot;25%&quot;},&quot;type&quot;:&quot;Rolling&quot;},&quot;template&quot;:{&quot;metadata&quot;:{&quot;labels&quot;:{&quot;app&quot;:&quot;openjdk18-web-basic-s2i&quot;,&quot;application&quot;:&quot;$projectName$&quot;,&quot;deploymentConfig&quot;:&quot;$projectName$&quot;},&quot;name&quot;:&quot;$projectName$&quot;},&quot;spec&quot;:{&quot;containers&quot;:[{&quot;image&quot;:&quot;$projectName$&quot;,&quot;imagePullPolicy&quot;:&quot;Always&quot;,&quot;name&quot;:&quot;$projectName$&quot;,&quot;ports&quot;:[{&quot;containerPort&quot;:8080,&quot;name&quot;:&quot;http&quot;,&quot;protocol&quot;:&quot;TCP&quot;}],&quot;resources&quot;:{},&quot;terminationMessagePath&quot;:&quot;/dev/termination-log&quot;,&quot;terminationMessagePolicy&quot;:&quot;File&quot;}],&quot;dnsPolicy&quot;:&quot;ClusterFirst&quot;,&quot;restartPolicy&quot;:&quot;Always&quot;,&quot;schedulerName&quot;:&quot;default-scheduler&quot;,&quot;securityContext&quot;:{},&quot;terminationGracePeriodSeconds&quot;:75}},&quot;test&quot;:false,&quot;triggers&quot;:[{&quot;imageChangeParams&quot;:{&quot;automatic&quot;:true,&quot;containerNames&quot;:[&quot;$projectName$&quot;],&quot;from&quot;:{&quot;kind&quot;:&quot;ImageStreamTag&quot;,&quot;name&quot;:&quot;$projectName$:latest&quot;}},&quot;type&quot;:&quot;ImageChange&quot;},{&quot;type&quot;:&quot;ConfigChange&quot;}]}}"/>
+                    <param name="kind" value="DeploymentConfig" />
+                    <param name="url" value="/apis/apps.openshift.io/v1/namespaces/$projectName$-test/deploymentconfigs" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;RoleBinding&quot;,&quot;apiVersion&quot;:&quot;rbac.authorization.k8s.io/v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;viewers&quot;,&quot;namespace&quot;:&quot;$projectName$-test&quot;},&quot;subjects&quot;:[{&quot;kind&quot;:&quot;Group&quot;,&quot;name&quot;:&quot;system:authenticated:oauth&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}],&quot;roleRef&quot;:{&quot;kind&quot;:&quot;ClusterRole&quot;,&quot;name&quot;:&quot;view&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}}"/>
+                    <param name="kind" value="RoleBinding" />
+                    <param name="url" value="/apis/rbac.authorization.k8s.io/v1/namespaces/$projectName$-test/rolebindings" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;RoleBinding&quot;,&quot;apiVersion&quot;:&quot;rbac.authorization.k8s.io/v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;jenkins-tag&quot;,&quot;namespace&quot;:&quot;$projectName$-test&quot;},&quot;subjects&quot;:[{&quot;kind&quot;:&quot;ServiceAccount&quot;,&quot;name&quot;:&quot;jenkins&quot;,&quot;namespace&quot;:&quot;jenkins&quot;}],&quot;roleRef&quot;:{&quot;kind&quot;:&quot;ClusterRole&quot;,&quot;name&quot;:&quot;edit&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}}"/>
+                    <param name="kind" value="RoleBinding" />
+                    <param name="url" value="/apis/rbac.authorization.k8s.io/v1/namespaces/$projectName$-test/rolebindings" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;Route&quot;,&quot;apiVersion&quot;:&quot;route.openshift.io/v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$&quot;,&quot;namespace&quot;:&quot;$projectName$-test&quot;},&quot;spec&quot;:{&quot;host&quot;:&quot;$projectName$.apps.#[DEV_DNS_SUFFIX]&quot;,&quot;subdomain&quot;:&quot;&quot;,&quot;to&quot;:{&quot;kind&quot;:&quot;Service&quot;,&quot;name&quot;:&quot;$projectName$&quot;,&quot;weight&quot;:100},&quot;port&quot;:{&quot;targetPort&quot;:8080},&quot;tls&quot;:{&quot;termination&quot;:&quot;edge&quot;},&quot;wildcardPolicy&quot;:&quot;None&quot;}}"/>
+                    <param name="kind" value="Route" />
+                    <param name="url" value="/apis/route.openshift.io/v1/namespaces/$projectName$-test/routes" />
+                </customTask>
+
+                <!-- Prod objects-->
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift-prod"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;Namespace&quot;,&quot;apiVersion&quot;:&quot;v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$-prod&quot;,&quot;labels&quot;:{&quot;name&quot;:&quot;$projectName$-prod&quot;}}}"/>
+                    <param name="kind" value="Namespace" />
+                    <param name="url" value="/api/v1/namespaces" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift-prod"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;image.openshift.io/v1&quot;,&quot;kind&quot;:&quot;ImageStream&quot;,&quot;metadata&quot;:{&quot;creationTimestamp&quot;:null,&quot;name&quot;:&quot;$projectName$&quot;,&quot;namespace&quot;:&quot;$projectName$-prod&quot;},&quot;spec&quot;:{&quot;lookupPolicy&quot;:{&quot;local&quot;:false}},&quot;status&quot;:{&quot;dockerImageRepository&quot;:&quot;&quot;}}"/>
+                    <param name="kind" value="ImageStream" />
+                    <param name="url" value="/apis/image.openshift.io/v1/namespaces/$projectName$-prod/imagestreams" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift-prod"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;v1&quot;,&quot;kind&quot;:&quot;Service&quot;,&quot;metadata&quot;:{&quot;namespace&quot;:&quot;$projectName$-prod&quot;,&quot;name&quot;:&quot;$projectName$&quot;},&quot;spec&quot;:{&quot;ports&quot;:[{&quot;port&quot;:8080,&quot;protocol&quot;:&quot;TCP&quot;,&quot;targetPort&quot;:8080}],&quot;selector&quot;:{&quot;deploymentConfig&quot;:&quot;$projectName$&quot;},&quot;sessionAffinity&quot;:&quot;None&quot;,&quot;type&quot;:&quot;ClusterIP&quot;},&quot;status&quot;:{&quot;loadBalancer&quot;:{}}}"/>
+                    <param name="kind" value="Service" />
+                    <param name="url" value="/api/v1/namespaces/$projectName$-prod/services" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift-prod"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;apps.openshift.io/v1&quot;,&quot;kind&quot;:&quot;DeploymentConfig&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$&quot;,&quot;namespace&quot;:&quot;$projectName$-prod&quot;},&quot;spec&quot;:{&quot;replicas&quot;:1,&quot;selector&quot;:{&quot;deploymentConfig&quot;:&quot;$projectName$&quot;},&quot;strategy&quot;:{&quot;rollingParams&quot;:{&quot;maxSurge&quot;:&quot;25%&quot;,&quot;maxUnavailable&quot;:&quot;25%&quot;},&quot;type&quot;:&quot;Rolling&quot;},&quot;template&quot;:{&quot;metadata&quot;:{&quot;labels&quot;:{&quot;app&quot;:&quot;openjdk18-web-basic-s2i&quot;,&quot;application&quot;:&quot;$projectName$&quot;,&quot;deploymentConfig&quot;:&quot;$projectName$&quot;},&quot;name&quot;:&quot;$projectName$&quot;},&quot;spec&quot;:{&quot;containers&quot;:[{&quot;image&quot;:&quot;$projectName$&quot;,&quot;imagePullPolicy&quot;:&quot;Always&quot;,&quot;name&quot;:&quot;$projectName$&quot;,&quot;ports&quot;:[{&quot;containerPort&quot;:8080,&quot;name&quot;:&quot;http&quot;,&quot;protocol&quot;:&quot;TCP&quot;}],&quot;resources&quot;:{},&quot;terminationMessagePath&quot;:&quot;/dev/termination-log&quot;,&quot;terminationMessagePolicy&quot;:&quot;File&quot;}],&quot;dnsPolicy&quot;:&quot;ClusterFirst&quot;,&quot;restartPolicy&quot;:&quot;Always&quot;,&quot;schedulerName&quot;:&quot;default-scheduler&quot;,&quot;securityContext&quot;:{},&quot;terminationGracePeriodSeconds&quot;:75}},&quot;test&quot;:false,&quot;triggers&quot;:[{&quot;imageChangeParams&quot;:{&quot;automatic&quot;:true,&quot;containerNames&quot;:[&quot;$projectName$&quot;],&quot;from&quot;:{&quot;kind&quot;:&quot;ImageStreamTag&quot;,&quot;name&quot;:&quot;$projectName$:latest&quot;}},&quot;type&quot;:&quot;ImageChange&quot;},{&quot;type&quot;:&quot;ConfigChange&quot;}]}}"/>
+                    <param name="kind" value="DeploymentConfig" />
+                    <param name="url" value="/apis/apps.openshift.io/v1/namespaces/$projectName$-prod/deploymentconfigs" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift-prod"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;RoleBinding&quot;,&quot;apiVersion&quot;:&quot;rbac.authorization.k8s.io/v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;viewers&quot;,&quot;namespace&quot;:&quot;$projectName$-prod&quot;},&quot;subjects&quot;:[{&quot;kind&quot;:&quot;Group&quot;,&quot;name&quot;:&quot;system:authenticated:oauth&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}],&quot;roleRef&quot;:{&quot;kind&quot;:&quot;ClusterRole&quot;,&quot;name&quot;:&quot;view&quot;,&quot;apiGroup&quot;:&quot;rbac.authorization.k8s.io&quot;}}"/>
+                    <param name="kind" value="RoleBinding" />
+                    <param name="url" value="/apis/rbac.authorization.k8s.io/v1/namespaces/$projectName$-prod/rolebindings" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift-prod"/>
+                    <param name="template" value="{&quot;kind&quot;:&quot;Route&quot;,&quot;apiVersion&quot;:&quot;route.openshift.io/v1&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$&quot;,&quot;namespace&quot;:&quot;$projectName$-prod&quot;},&quot;spec&quot;:{&quot;host&quot;:&quot;$projectName$.apps.#[PROD_DNS_SUFFIX]&quot;,&quot;subdomain&quot;:&quot;&quot;,&quot;to&quot;:{&quot;kind&quot;:&quot;Service&quot;,&quot;name&quot;:&quot;$projectName$&quot;,&quot;weight&quot;:100},&quot;port&quot;:{&quot;targetPort&quot;:8080},&quot;tls&quot;:{&quot;termination&quot;:&quot;edge&quot;},&quot;wildcardPolicy&quot;:&quot;None&quot;}}"/>
+                    <param name="kind" value="Route" />
+                    <param name="url" value="/apis/route.openshift.io/v1/namespaces/$projectName$-prod/routes" />
+                </customTask>
+
+                <!-- provision pull token to prod -->
+                <customTask className="com.tremolosecurity.unison.k8s.tasks.BuildDockerToken">
+                    <param name="target" value="openshift"/>
+                    <param name="prodTarget" value="openshift-prod"/>
+                    <param name="registryHost" value="#[OPENSHIFT_DEV_REGISTRY_HOST]"/>
+                </customTask>
+
+                <customTask className="com.tremolosecurity.provisioning.tasks.CreateK8sObject">
+                    <param name="targetName" value="openshift-prod"/>
+                    <param name="template" value="{&quot;apiVersion&quot;:&quot;v1&quot;,&quot;data&quot;:{&quot;.dockerconfigjson&quot;:&quot;$b64EncodedDockerToken$&quot;},&quot;kind&quot;:&quot;Secret&quot;,&quot;metadata&quot;:{&quot;name&quot;:&quot;$projectName$-pull&quot;,&quot;namespace&quot;:&quot;$projectName$-prod&quot;},&quot;type&quot;:&quot;kubernetes.io/dockerconfigjson&quot;}"/>
+                    <param name="kind" value="Secret" />
+                    <param name="url" value="/api/v1/namespaces/$projectName$-prod/secrets" />
+                </customTask>
+
+                <customTask className="com.tremolosecurity.unison.k8s.tasks.PatchK8sObject">
+                    <param name="targetName" value="openshift-prod"/>
+                    <param name="template" value="{&quot;imagePullSecrets&quot;: $patchData$}"/>
+                    <param name="kind" value="ServiceAccount"/>
+                    <param name="url" value="/api/v1/namespaces/$projectName$-prod/serviceaccounts/default"/>
+                </customTask>
+
+                <notifyUser subject="Application created" mailAttrib="mail">
+                    <msg>Your application has been created</msg>
+                </notifyUser>
+            </onSuccess>
+            <onFailure/>
+            <emailTemplate>A new application has been requested</emailTemplate>
+            <approvers>
+                <rule scope="group" constraint="cn=administrators,ou=groups,ou=shadow,o=Tremolo"/>
+            </approvers>
+            <mailAttr>mail</mailAttr>
+            <failureEmailSubject>Project not approved</failureEmailSubject>
+            <failureEmailMsg>Because:&#xD;
+&#xD;
+${reason}</failureEmailMsg>
+            <escalationPolicy>
+                <escalationFailure action="leave">
+                    <azRules/>
+                </escalationFailure>
+            </escalationPolicy>
+        </approval>
+    </tasks>
+</workflow>

@@ -1,0 +1,9 @@
+<target name="openshift-prod" className="com.tremolosecurity.unison.openshiftv3.OpenShiftTarget">
+    <params>
+        <param name="url" value="#[OPENSHIFT_PROD_API_URL]"/>
+        <param name="userName" value=""/>
+        <param name="password" value=""/>
+        <param name="token" value="#[PROD_SECRET]"/>
+        <param name="useToken" value="true"/>
+    </params>
+</target>
