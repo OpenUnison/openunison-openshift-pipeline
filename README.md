@@ -6,6 +6,16 @@ This example pulls together GitLab, SonarQube and two OpenShift clusters to auto
 
 Short demo (~10 minutes) of this repository in action - https://vimeo.com/390996454
 
+The repo will provision:
+
+1. GitLab Project
+2. Project on OpenShift Dev
+3. Pipeline on OpenShift Dev
+4. Links the OpenShift pipeline to the GitLab project
+5. Project on OpenShift Production
+6. Link ImageStreams from Prod to Dev to automate deployments
+
+Additionally, when the team is ready to provision to production a workflow is provided to automate the provisioning of the image from development to production with appropriate approvals.
 
 
 # Pre-requisites:
