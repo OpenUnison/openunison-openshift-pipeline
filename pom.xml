@@ -10,12 +10,12 @@
   <repositories>
     <repository>
       <id>Tremolo Security Releases</id>
-      <url>https://mvn.apps.tremolo.io/repository/betas/</url>
+      <url>https://nexus.tremolo.io/repository/betas/</url>
     </repository>
 
     <repository>
       <id>Tremolo Security Dependencies</id>
-      <url>https://mvn.apps.tremolo.io/repository/dependencies/</url>
+      <url>https://nexus.tremolo.io/repository/dependencies/</url>
     </repository>
   </repositories>
 

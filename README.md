@@ -2,6 +2,12 @@
 
 This example pulls together GitLab, SonarQube and two OpenShift clusters to automate the deployment of projects into OpenShift and provide an automated way to deploy pipelines.  This repo isn't designed to be a turn-key solution but is instead meant to be an example of what is possible and as a starting point for your own workflow.
 
+![OpenUnison Pipeline Demo Video](https://i.vimeocdn.com/video/855497103_200x150.jpg)
+
+Short demo (~10 minutes) of this repository in action - https://vimeo.com/390996454
+
+
+
 # Pre-requisites:
 
 1. GitLab
@@ -9,6 +15,7 @@ This example pulls together GitLab, SonarQube and two OpenShift clusters to auto
 3. AWS SQS
 4. SonarQube
 5. Two OpenShift clusters (one for dev, and one for prod)
+6. Email Server for notifications
 
 # Deployment
 
